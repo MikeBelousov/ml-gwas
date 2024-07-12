@@ -16,6 +16,7 @@ import sys
 def abs_mean(x):
     return(abs(x).mean())
 
+# Get command line arguments
 path_data = sys.argv[1]
 prefix = sys.argv[2]
 
