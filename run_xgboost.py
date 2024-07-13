@@ -34,9 +34,7 @@ path_data = sys.argv[1] # path/to/genotypes.txt
 prefix = sys.argv[2] # path/to/prefix to save output files
 
 # Check input
-if not os.path.isfile(path_data):
-    print(path_data, "doesn't exist")
-    sys.exit(1)
+helpers.check_input(list(path_data))
 
 # Initiate variables
 ts = time.time()
