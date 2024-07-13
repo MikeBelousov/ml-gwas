@@ -1,1 +1,1 @@
-# GWAS with machine learning
+# GWAS based on machine learning
