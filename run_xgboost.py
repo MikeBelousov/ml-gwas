@@ -34,7 +34,7 @@ path_data = sys.argv[1] # path/to/genotypes.txt
 prefix = sys.argv[2] # path/to/prefix to save output files
 
 # Check input
-helpers.check_input(list(path_data))
+helpers.check_input([path_data])
 
 # Initiate variables
 ts = time.time()
