@@ -17,3 +17,6 @@ def check_input(files: list):
         if not os.path.isfile(file):
             print(file, "doesn't exist")
             sys.exit(1)
+            
+def abs_mean(x):
+    return(abs(x).mean())
