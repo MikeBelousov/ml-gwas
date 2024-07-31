@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt 
 import shap 
 import os, sys
-from helpers import check_input, abs_mean
+from helpers import check_input, abs_mean, show_time_elepsed
 import time
 
 # Get command line arguments
@@ -116,5 +116,5 @@ df1.sort_values("mean_shap_values", inplace=True, ascending=False)
 df1.to_csv(prefix + ".shap.txt", sep = " ", index=False, header=False)
 
 # Show time elepsed
-helpers.show_time_elepsed(ts)
+show_time_elepsed(ts)
 
