@@ -9,54 +9,68 @@ import pandas as pd
 import matplotlib.pyplot as plt 
 import xgboost as xgb 
 import shap 
-import os, sys
 import helpers
 import time
-
+import argparse
+import sys
 
 # === Functions ===
 
 def abs_mean(x):
     return(abs(x).mean())
 
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Run XGBoost on encoded matrix')
+    parser.add_argument('-m', '--matrix', type=str, help='Path to encoded matrix')
+    parser.add_argument('-o', '--outcomes', type=str, help='Path to binary vector')
+    parser.add_argument('-f', '--features', type=str, help='Path to features')
+    parser.add_argument('-p', '--prefix', type=str, help='Prefix to save output files')
+    return  parser.parse_args() 
+
 # === End of fucntions ===
 
 # Get command line arguments
-path_data_matrix = sys.argv[1] # path/to/encoded_matrix.txt
-path_data_outcomes = sys.argv[2] # path/to/binary_vektor.txt
-path_data_features = sys.argv[3] # path/to/features.txt
-prefix = sys.argv[4] # path/to/prefix to save output files
-
-
-# Check input
-helpers.check_input([path_data_matrix])
-helpers.check_input([path_data_outcomes])
-helpers.check_input([path_data_features])
-
+args = parse_args()
 
 # Initiate variables
+path_data_matrix = args.matrix # path/to/encoded_matrix.txt
+path_data_outcomes = args.outcomes # path/to/binary_vektor.txt
+path_data_features = args.features # path/to/features.txt
+prefix = args.prefix # path/to/prefix to save output files
+random_state = 123
+test_size = 0.2
+n = 20 # The number of top features to plot
 ts = time.time()
 
-# Loading data
-matrix = pd.read_csv(path_data_matrix, sep=" ")
-with open(path_data_outcomes, 'r') as file:
-    outcomes = list(map(int, file.read().split()))
-with open(path_data_features, 'r') as file:
-    features = file.read().split()
+# Check input
+helpers.check_input([path_data_matrix, path_data_outcomes, path_data_features])
 
+# Load data
+print("Loading data...")
+matrix = np.loadtxt(path_data_matrix, dtype=np.bool_)
+outcomes = np.loadtxt(path_data_outcomes, dtype=np.bool_)
+features = np.loadtxt(path_data_features, dtype=np.str_)
 
-outcomes = outcomes[0:-1]
-matrix.columns =features
-
+# Show data sizes
+print(f"Matrix shape: {matrix.shape[0]} x {matrix.shape[1]}")
+print(f"Outcomes shape: {outcomes.shape[0]}")
+print(f"Features shape: {features.shape[0]}")
 
 # Split data into train and test ones
-X_train, X_test, y_train, y_test = train_test_split(matrix, outcomes, random_state=42, stratify=outcomes, test_size=0.33)
+X_train, X_test, y_train, y_test = train_test_split(matrix, outcomes, 
+                                                    random_state=random_state, 
+                                                    stratify=outcomes, 
+                                                    test_size=test_size)
 
 # Initiate the classifier
-clf_xgb = xgb.XGBClassifier(objective='binary:logistic', seed=42, eval_metric='aucpr', early_stopping_rounds=10)
+clf_xgb = xgb.XGBClassifier(objective='binary:logistic', 
+                            seed=random_state, 
+                            eval_metric='aucpr', 
+                            early_stopping_rounds=10)
 
 # Train the model
-print("Training the model")
+print("Training the model...")
 clf_xgb.fit(X_train,
             y_train,
             verbose=True,
@@ -78,28 +92,25 @@ plt.clf()
 # Estimate the quality of model
 y_pred_proba = clf_xgb.predict_proba(X_test)[:, 1]
 aucpr_score = roc_auc_score(y_test, y_pred_proba)
+cr = classification_report(y_test, y_pred, zero_division=0, target_names=["0", "1"])
 
 # Save quality metrix into file
 with open(prefix + ".qc.txt", "w") as fh:
     print("AUC-PR Score:", aucpr_score, file=fh)
-    print(classification_report(y_test, y_pred), file=fh)
+    print(cr, file=fh)
 
 # Get feature importances and save into file
 importances = clf_xgb.feature_importances_
-features = pd.Series(importances, index=matrix.columns).sort_values(ascending=False)
-features.to_csv(prefix + '.importance.csv', header=False)
+feature_importances = pd.Series(importances, index=features).sort_values(ascending=False)
+feature_importances.to_csv(prefix + '.importance.csv', header=False)
 
-# Plot Top 20 feature importances
-n = 20
-groups = features.index[:n]
-counts = features[:n]
-
+# Plot Top feature importances
+top_features = feature_importances.head(n)
 plt.figure(figsize=(10, 6))
 plt.subplots_adjust(bottom=0.3)
-plt.bar(groups, counts)
+plt.bar(top_features.index, top_features.values)
 plt.xticks(rotation=90)
 plt.savefig(prefix + '.feature_importance.png')
-
 plt.clf()
 
 # Initiate SHAP values explaner
@@ -109,13 +120,13 @@ explainer = shap.TreeExplainer(clf_xgb)
 shap_values = explainer.shap_values(X_train)
 
 # Make barplot for 20 TOP SHAP values
-shap.summary_plot(shap_values=shap_values, feature_names=matrix.columns, plot_type="bar")
+shap.summary_plot(shap_values=shap_values, feature_names=features, plot_type="bar")
 plt.savefig(prefix + ".shap.png")
 
 # Count mean absolute values of SHAP values
 print("Counting mean abs SHAP values...")
 mean_shap_values = np.apply_along_axis(abs_mean, axis=0, arr=shap_values)
-df1 = pd.DataFrame({"features" : matrix.columns,
+df1 = pd.DataFrame({"features" : features,
                    "mean_shap_values" : mean_shap_values})
 
 # Sort data frame by descending SHAP values
