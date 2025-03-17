@@ -1,4 +1,6 @@
 from sklearn.model_selection import train_test_split 
+import optuna
+from sklearn.metrics import accuracy_score
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay 
 from sklearn.metrics import roc_auc_score 
 from sklearn.metrics import classification_report 
@@ -63,18 +65,52 @@ X_train, X_test, y_train, y_test = train_test_split(matrix, outcomes,
                                                     stratify=outcomes, 
                                                     test_size=test_size)
 
-# Initiate the classifier
-clf_xgb = xgb.XGBClassifier(objective='binary:logistic', 
-                            seed=random_state, 
-                            eval_metric='aucpr', 
-                            early_stopping_rounds=10)
+# Initiate optuna function
+def objective(trial):
+    param = {
+        'objective': 'binary:logistic',
+        'eval_metric': 'aucpr',  
+        'seed': random_state,
+        'early_stopping_rounds': 10,
+        'lambda': trial.suggest_float('lambda', 1e-8, 1.0, log=True),
+        'alpha': trial.suggest_float('alpha', 1e-8, 1.0, log=True),
+        'max_depth': trial.suggest_int('max_depth', 3, 9),
+        'eta': trial.suggest_float('eta', 0.01, 0.3),  
+        'gamma': trial.suggest_float('gamma', 1e-8, 1.0, log=True),
+        'subsample': trial.suggest_float('subsample', 0.5, 1.0),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
+    }
 
-# Train the model
-print("Training the model...")
-clf_xgb.fit(X_train,
-            y_train,
-            verbose=True,
-            eval_set=[(X_test, y_test)])
+    # Initiate the classifier
+    clf_xgb = xgb.XGBClassifier(**param)
+
+    # Train the model
+    print("Training the model...")
+    clf_xgb.fit(X_train,
+                y_train,
+                verbose=True,
+                eval_set=[(X_test, y_test)])
+
+    y_pred = clf_xgb.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    return accuracy
+
+# Hyperparameter selection
+study = optuna.create_study(direction='maximize')  
+study.optimize(objective, n_trials=50)
+
+best_params = study.best_params
+best_params['objective'] = 'binary:logistic'
+best_params['eval_metric'] = 'aucpr'
+best_params['seed'] = random_state
+best_params['early_stopping_rounds'] = 10
+
+# Train the final model
+clf_xgb = xgb.XGBClassifier(**best_params)
+print("Training the final model...")
+clf_xgb.fit(X_train, y_train,
+                  eval_set=[(X_test, y_test)],
+                  verbose=True)
 
 # Plot ROC curve
 svc_disp = RocCurveDisplay.from_estimator(clf_xgb, X_test, y_test)
