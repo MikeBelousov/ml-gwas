@@ -20,3 +20,8 @@ def check_input(files: list):
             
 def abs_mean(x):
     return(abs(x).mean())
+
+def save_dict(dict, filename):
+    with open(filename, 'w') as f:
+        for k, v in dict.items():
+            print(f'{k}: {v}', file=f)

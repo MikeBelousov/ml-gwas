@@ -14,7 +14,7 @@ import shap
 import helpers
 import time
 import argparse
-import sys
+
 
 # === Functions ===
 
@@ -69,7 +69,7 @@ X_train, X_test, y_train, y_test = train_test_split(matrix, outcomes,
 def objective(trial):
     param = {
         'objective': 'binary:logistic',
-        'eval_metric': 'aucpr',  
+        'eval_metric': 'auc',  
         'seed': random_state,
         'early_stopping_rounds': 10,
         'lambda': trial.suggest_float('lambda', 1e-8, 1.0, log=True),
@@ -90,18 +90,23 @@ def objective(trial):
                 y_train,
                 verbose=True,
                 eval_set=[(X_test, y_test)])
-
-    y_pred = clf_xgb.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    return accuracy
+    
+    # Evaluate the model
+    y_pred_proba = clf_xgb.predict_proba(X_test)[:, 1]
+    auc = roc_auc_score(y_test, y_pred_proba)
+    
+    return auc
 
 # Hyperparameter selection
 study = optuna.create_study(direction='maximize')  
 study.optimize(objective, n_trials=50)
 
+# Get best parameters
 best_params = study.best_params
+
+# Add other parameters
 best_params['objective'] = 'binary:logistic'
-best_params['eval_metric'] = 'aucpr'
+best_params['eval_metric'] = 'auc'
 best_params['seed'] = random_state
 best_params['early_stopping_rounds'] = 10
 
@@ -111,6 +116,9 @@ print("Training the final model...")
 clf_xgb.fit(X_train, y_train,
                   eval_set=[(X_test, y_test)],
                   verbose=True)
+
+# Save hyperparameters
+helpers.save_dict(study.best_params, prefix + '.best.params.txt')
 
 # Plot ROC curve
 svc_disp = RocCurveDisplay.from_estimator(clf_xgb, X_test, y_test)
@@ -127,12 +135,12 @@ plt.clf()
 
 # Estimate the quality of model
 y_pred_proba = clf_xgb.predict_proba(X_test)[:, 1]
-aucpr_score = roc_auc_score(y_test, y_pred_proba)
+auc = roc_auc_score(y_test, y_pred_proba)
 cr = classification_report(y_test, y_pred, zero_division=0, target_names=["0", "1"])
 
 # Save quality metrix into file
 with open(prefix + ".qc.txt", "w") as fh:
-    print("AUC-PR Score:", aucpr_score, file=fh)
+    print("AUC:", auc, file=fh)
     print(cr, file=fh)
 
 # Get feature importances and save into file
