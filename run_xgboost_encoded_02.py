@@ -59,11 +59,15 @@ print(f"Matrix shape: {matrix.shape[0]} x {matrix.shape[1]}")
 print(f"Outcomes shape: {outcomes.shape[0]}")
 print(f"Features shape: {features.shape[0]}")
 
-# Split data into train and test ones
-X_train, X_test, y_train, y_test = train_test_split(matrix, outcomes, 
-                                                    random_state=random_state, 
-                                                    stratify=outcomes, 
-                                                    test_size=test_size)
+# Split data into train, test and valid ones
+X_temp, X_test, y_temp, y_test = train_test_split(matrix, outcomes, 
+                                                  test_size=0.65, 
+                                                  random_state=random_state, 
+                                                  stratify=outcomes)
+X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, 
+                                                  test_size=0.4286, 
+                                                  random_state=random_state, 
+                                                  stratify=y_temp)
 
 # Initiate optuna function
 def objective(trial):
@@ -119,6 +123,15 @@ clf_xgb.fit(X_train, y_train,
 
 # Save hyperparameters
 helpers.save_dict(study.best_params, prefix + '.best.params.txt')
+
+# Overfitting check
+y_train_pred_proba = clf_xgb.predict_proba(X_train)[:, 1]
+y_val_pred_proba = clf_xgb.predict_proba(X_val)[:, 1]
+y_test_pred_proba = clf_xgb.predict_proba(X_test)[:, 1]
+train_aucpr = roc_auc_score(y_train, y_train_pred_proba)
+val_aucpr = roc_auc_score(y_val, y_val_pred_proba)
+test_aucpr = roc_auc_score(y_test, y_test_pred_proba)
+print(f"Train AUC-PR: {train_aucpr:.4f}, Val AUC-PR: {val_aucpr:.4f}, Test AUC-PR: {test_aucpr:.4f}")
 
 # Plot ROC curve
 svc_disp = RocCurveDisplay.from_estimator(clf_xgb, X_test, y_test)
